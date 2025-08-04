@@ -1,0 +1,306 @@
+package it.xx.xxx.core.noPrized.repository;
+
+import it.xx.xxx.core.common.JdbcTemplates;
+import it.xx.xxx.core.common.TransactionManagers;
+import it.xx.xxx.domain.noPrized.NonPrezzato;
+import it.xx.xxx.domain.noPrized.NonPrezzatoFilters;
+import it.xx.xxx.domain.noPrized.NonPrezzatoRequest;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.ParameterizedType;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+
+import static it.xx.xxx.core.noPrized.query.NoPrizedQueries.GET_LAST_FIVE_DAYS;
+import static org.apache.commons.lang3.StringUtils.trimToEmpty;
+
+
+@Repository
+@Transactional(value = TransactionManagers.DB2LINUX, rollbackFor = Exception.class)
+public class NoPrizedRepositoryImpl implements NoPrizedRepository {
+
+    @Qualifier(JdbcTemplates.DB2LINUX)
+    @Autowired
+    JdbcTemplate jdbcSqlServer;
+
+    private final static String ONLY_SOME_FIELD = "ONLY_SOME_FIELD";
+    private final static String ALL_FIELDS = "ALL_FIELDS";
+
+    private final static String ERRORE_SINTETICO = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(SUBSTR(errore, LOCATE('-', errore) + 1, " +
+            "CASE LOCATE('-', SUBSTR(errore, LOCATE('-', errore) + 1)) WHEN 0 THEN LENGTH(errore) " +
+            "ELSE LOCATE('-', SUBSTR(errore, LOCATE('-', errore) + 1)) - 1 END " +
+            "),'0',''),'1' ,''),'2' ,''),'3',''),'4',''),'5',''),'6',''),'7',''),'8',''),'9','')";
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Date> getLastFiveDays() {
+        List<Date> dates = jdbcSqlServer.query(GET_LAST_FIVE_DAYS, new Object[]{}, new RowMapper<Date>() {
+            @Override
+            public Date mapRow(ResultSet rs, int rowNum) throws SQLException {
+                return rs.getDate("DT_ELAB");
+            }
+        });
+        return dates;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Integer getRecordsCount(NonPrezzatoRequest request) {
+        List<String> checked = new ArrayList<>();
+        String countSql = null;
+        if(ONLY_SOME_FIELD.equals(request.getMode())) {
+            Field[] checkboxes = request.getChecked().getClass().getDeclaredFields();
+            for (Field checkbox : checkboxes) {
+                checkbox.setAccessible(true);
+                Object value = null;
+                try {
+                    value = checkbox.get(request.getChecked());
+                } catch (IllegalAccessException e) {
+                    e.getMessage();
+                }
+                if (value.equals(true)) {
+                    if ("erroreSintetico".equalsIgnoreCase(checkbox.getName())) {
+                        checked.add(ERRORE_SINTETICO + " as erroreSintetico");
+                    } else {
+                        checked.add(checkbox.getName());
+                    }
+                }
+            }
+            countSql = "SELECT COUNT(*) FROM ( SELECT DISTINCT " + StringUtils.join(checked, ",");
+        } else if(ALL_FIELDS.equals(request.getMode())) {
+            List<String> campi = new ArrayList<>();
+            Field[] allFields = request.getFilters().getClass().getDeclaredFields();
+            for (Field field : allFields) {
+                if (!"erroreSintetico".equalsIgnoreCase(field.getName())) {
+                    campi.add(field.getName());
+                }
+            }
+            countSql = "SELECT COUNT(*) FROM ( SELECT DISTINCT " + StringUtils.join(campi, ",");
+        }
+        countSql += " FROM nnn.BC_NON_PREZZATI WHERE DATE(DATA_ELABORAZIONE) = ? " + getWhereClause(request.getFilters()) + ") aa ";
+
+        return jdbcSqlServer.queryForObject(countSql, new Object[]{request.getDate()}, Integer.class);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<NonPrezzato> getTableData(NonPrezzatoRequest request) {
+
+        List<String> campiName = new ArrayList<>();
+        List<String> campi1 = new ArrayList<>();
+        List<String> campi2 = new ArrayList<>();
+
+        if(ONLY_SOME_FIELD.equals(request.getMode())) {
+            Field[] checkboxes = request.getChecked().getClass().getDeclaredFields();
+            for (Field checkbox : checkboxes) {
+                checkbox.setAccessible(true);
+                Object value = null;
+                try {
+                    value = checkbox.get(request.getChecked());
+                } catch (IllegalAccessException e) {
+                    e.getMessage();
+                }
+                if (value.equals(true)) {
+                    campiName.add(checkbox.getName());
+                    if ("erroreSintetico".equalsIgnoreCase(checkbox.getName())) {
+                        campi1.add(ERRORE_SINTETICO);
+                        campi2.add(ERRORE_SINTETICO + " as erroreSintetico");
+                    } else {
+                        campi1.add(checkbox.getName());
+                        campi2.add(checkbox.getName());
+                    }
+                }
+            }
+        } else if(ALL_FIELDS.equals(request.getMode())) {
+            Field[] allFields = request.getFilters().getClass().getDeclaredFields();
+            for (Field field : allFields) {
+                campiName.add(field.getName());
+                if ("erroreSintetico".equalsIgnoreCase(field.getName())) {
+                    campi1.add(ERRORE_SINTETICO);
+                    campi2.add(ERRORE_SINTETICO + " as erroreSintetico");
+                } else {
+                    campi1.add(field.getName());
+                    campi2.add(field.getName());
+                }
+            }
+        }
+        String sql = " SELECT * FROM (SELECT DISTINCT DENSE_RANK() OVER (ORDER BY " + StringUtils.join(campi1, ",") +
+                " ) AS RowNum, " + StringUtils.join(campi2, ",") + " FROM nnn.BC_NON_PREZZATI " +
+                " WHERE DATE(DATA_ELABORAZIONE) = ? " + getWhereClause(request.getFilters()) + " ORDER BY RowNum) aa " +
+                " WHERE RowNum > " + request.getMin() + " AND RowNum <= " + request.getMax();
+
+        List<String> finalCampiName = campiName;
+        List<NonPrezzato> records = jdbcSqlServer.query(sql, new Object[]{request.getDate()}, new RowMapper<NonPrezzato>() {
+            @Override
+            public NonPrezzato mapRow(ResultSet rs, int rowNum) throws SQLException {
+                NonPrezzato nonP = new NonPrezzato();
+                for (String campo: finalCampiName) {
+                    try {
+                        Field field = nonP.getClass().getDeclaredField(campo);
+                        Class type = field.getType();
+                        field.setAccessible(true);
+                        try {
+                            //i campi sono tutti o string o int
+                            if (type.equals(String.class)) {
+                                field.set(nonP, trimToEmpty(rs.getString(campo)));
+                            } else if (type.equals(Integer.class)) {
+                                field.set(nonP, rs.getInt(campo));
+                            }
+                        } catch (Exception e) {
+                            e.getMessage();
+                        }
+                    } catch (NoSuchFieldException e) {
+                        e.getMessage();
+                    }
+                }
+                return nonP;
+            }
+        });
+        return records;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public NonPrezzatoFilters getFiltersTable(NonPrezzatoRequest request) {
+        NonPrezzatoFilters output = new NonPrezzatoFilters();
+        if(ONLY_SOME_FIELD.equals(request.getMode())) {
+            output = getOnlySomeFiltersNoPrized(request);
+        } else if(ALL_FIELDS.equals(request.getMode())) {
+            output = getAllFiltersNoPrized(request);
+        }
+        return output;
+    }
+
+    private NonPrezzatoFilters getOnlySomeFiltersNoPrized(NonPrezzatoRequest request) {
+
+        NonPrezzatoFilters filterOutput = new NonPrezzatoFilters();
+
+        Field[] checkboxes = request.getChecked().getClass().getDeclaredFields();
+        for (Field checkbox : checkboxes) {
+            checkbox.setAccessible(true);
+            Object value = null;
+            try {
+                value = checkbox.get(request.getChecked());
+            } catch (IllegalAccessException e) {
+                e.getMessage();
+            }
+            String sql = "SELECT DISTINCT ";
+            if(value.equals(true)) {
+                if ("erroreSintetico".equalsIgnoreCase(checkbox.getName())) {
+                    sql += ERRORE_SINTETICO + " as erroreSintetico";
+                } else {
+                    sql += checkbox.getName();
+                }
+                sql += " FROM nnn.BC_NON_PREZZATI WHERE DATE(DATA_ELABORAZIONE) = ? " + getWhereClause(request.getFilters());
+
+
+                Field filtro = null;
+                try {
+                    filtro = filterOutput.getClass().getDeclaredField(checkbox.getName());
+                } catch (NoSuchFieldException e) {
+                    e.getMessage();
+                }
+
+                ParameterizedType integerListType = (ParameterizedType) filtro.getGenericType();
+                Class<?> type = (Class<?>) integerListType.getActualTypeArguments()[0];
+                List<?> records = null;
+                if (type.equals(String.class)) {
+                    records = jdbcSqlServer.query(sql, new Object[]{request.getDate()}, new RowMapper<String>() {
+                        @Override
+                        public String mapRow(ResultSet rs, int rowNum) throws SQLException {
+                            return trimToEmpty(rs.getString(checkbox.getName()));
+                        }
+                    });
+                } else if (type.equals(Integer.class)) {
+                    records = jdbcSqlServer.query(sql, new Object[]{request.getDate()}, new RowMapper<Integer>() {
+                        @Override
+                        public Integer mapRow(ResultSet rs, int rowNum) throws SQLException {
+                            return rs.getInt(checkbox.getName());
+                        }
+                    });
+                }
+                try {
+                    filtro.setAccessible(true);
+                    filtro.set(filterOutput, records);
+                } catch (IllegalAccessException e) {
+                    e.getMessage();
+                }
+            }
+        }
+        return filterOutput;
+    }
+
+    private NonPrezzatoFilters getAllFiltersNoPrized(NonPrezzatoRequest request) {
+
+        NonPrezzatoFilters filterOutput = new NonPrezzatoFilters();
+        Field[] campiName = filterOutput.getClass().getDeclaredFields();
+
+        for (Field campo : campiName) {
+            String sql = "SELECT DISTINCT ";
+            if ("erroreSintetico".equalsIgnoreCase(campo.getName())) {
+                sql += ERRORE_SINTETICO + " as erroreSintetico";
+            } else {
+                sql += campo.getName();
+            }
+            sql += " FROM nnn.BC_NON_PREZZATI WHERE DATE(DATA_ELABORAZIONE) = ? " + getWhereClause(request.getFilters());
+
+            ParameterizedType integerListType = (ParameterizedType) campo.getGenericType();
+            Class<?> type = (Class<?>) integerListType.getActualTypeArguments()[0];
+            List<?> records = null;
+            if (type.equals(String.class)) {
+                records = jdbcSqlServer.query(sql, new Object[]{request.getDate()}, new RowMapper<String>() {
+                    @Override
+                    public String mapRow(ResultSet rs, int rowNum) throws SQLException {
+                        return trimToEmpty(rs.getString(campo.getName()));
+                    }
+                });
+            } else if (type.equals(Integer.class)) {
+                records = jdbcSqlServer.query(sql, new Object[]{request.getDate()}, new RowMapper<Integer>() {
+                    @Override
+                    public Integer mapRow(ResultSet rs, int rowNum) throws SQLException {
+                        return rs.getInt(campo.getName());
+                    }
+                });
+            }
+            try {
+                campo.setAccessible(true);
+                campo.set(filterOutput, records);
+            } catch (IllegalAccessException e) {
+                e.getMessage();
+            }
+        }
+        return filterOutput;
+    }
+
+    private String getWhereClause(NonPrezzato filters) {
+        String sql = "";
+        Field[] fields = filters.getClass().getDeclaredFields();
+        for (Field field : fields) {
+            field.setAccessible(true);
+            Object value = null;
+            try {
+                value = field.get(filters);
+            } catch (IllegalAccessException e) {
+                e.getMessage();
+            }
+            if(value != null && value != ""){
+                if("erroreSintetico".equals(field.getName())){
+                    sql += " AND " + ERRORE_SINTETICO + " = '" + value + "' ";
+                } else {
+                    sql += " AND " + field.getName() + " = '" + value + "' ";
+                }
+            }
+        }
+        return sql;
+    }
+}
