@@ -1,0 +1,384 @@
+package it.xx.xxx.core.productsconfig.repository;
+
+import it.xx.xxx.core.common.JdbcTemplates;
+import it.xx.xxx.core.common.TransactionManagers;
+import it.xx.xxx.core.productsconfig.mapper.*;
+import it.xx.xxx.domain.productsconfig.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import static it.xx.xxx.core.productsconfig.query.AnagraficheQueries.*;
+import static it.xx.xxx.core.productsconfig.query.DeleteRowQueries.*;
+import static it.xx.xxx.core.productsconfig.query.ModRowQueries.*;
+import static it.xx.xxx.core.productsconfig.query.NewRowQueries.*;
+import static it.xx.xxx.core.productsconfig.query.ProductsConfigQueries.*;
+import static it.xx.xxx.core.productsconfig.query.SubCriteriaQueries.*;
+
+@Repository
+@Transactional(value = TransactionManagers.DB2LINUX, rollbackFor = Exception.class)
+public class ProductsConfigRepositoryImpl implements ProductsConfigRepository {
+
+    @Qualifier(JdbcTemplates.DB2LINUX)
+    @Autowired
+    JdbcTemplate jdbcSqlServer;
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Prioritarization> getPrioritarizations() {
+        List<Prioritarization> flusso = jdbcSqlServer.query(GET_PRIORITARIZATIONS, new Object[]{}, new PrioritarizationRowMapper());
+        return flusso;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Flusso> getListaFlussi() {
+        List<Flusso> flusso = jdbcSqlServer.query(GET_BC_FLOW_CONFIG, new Object[]{}, new FlussoRowMapper());
+        return flusso;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Pax> getListaPax() {
+        List<Pax> paxs = jdbcSqlServer.query(GET_BC_PAX_CONFIG, new Object[]{}, new PaxRowMapper());
+        return paxs;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Prodotto> getListaProdotti() {
+        List<Prodotto> prodotti = jdbcSqlServer.query(GET_BC_PRODUCT_CONFIG, new Object[]{}, new ProdotttiRowMapper());
+        return prodotti;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Prodotto> getProductsNotUsed() {
+        List<Prodotto> prodotti = jdbcSqlServer.query(GET_PRODUCT_NOT_USED, new Object[]{}, new ProdotttiRowMapper());
+        return prodotti;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Persistenza> getListaPersistenza() {
+        List<Persistenza> pers = jdbcSqlServer.query(GET_BC_PERSISTENCE_CONFIG, new Object[]{}, new PersistenzaRowMapper());
+        return pers;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Criterio> getListaCriteri() {
+        List<Criterio> crit = jdbcSqlServer.query(GET_BC_PRODUCT_CRITERIA, new Object[]{}, new CriterioRowMapper());
+        return crit;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Integer> getPaxByProductId(int productId) {
+        List<Integer> ids = jdbcSqlServer.query(GET_PAX_BY_PRODUCT_ID, new Object[]{ productId }, new RowMapper<Integer>(){
+            @Override
+            public Integer mapRow(ResultSet rs, int rowNum) throws SQLException {
+                return rs.getInt("ID");
+            }
+        });
+        return ids;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Integer> getPersistanceByProductId(int productId) {
+        List<Integer> ids = jdbcSqlServer.query(GET_PERSISTENCE_BY_PRODUCT_ID, new Object[]{ productId }, new RowMapper<Integer>(){
+            @Override
+            public Integer mapRow(ResultSet rs, int rowNum) throws SQLException {
+                return rs.getInt("ID");
+            }
+        });
+        return ids;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Integer> getCriteriaByIds(int productId, int producerId) {
+        List<Integer> ids = jdbcSqlServer.query(GET_CRITERIA_BY_IDS, new Object[]{ productId, producerId }, new RowMapper<Integer>(){
+            @Override
+            public Integer mapRow(ResultSet rs, int rowNum) throws SQLException {
+                return rs.getInt("ID");
+            }
+        });
+        return ids;
+    }
+
+    @Override
+    public int saveFlusso(Flusso flusso) {
+        String sql;
+        Object[] args;
+        if(flusso.getId() != null){
+            args = new Object[]{ flusso.getDescrizione(), flusso.getTopicName(), flusso.getId() };
+            sql = UPDATE_BC_FLOW_CONFIG;
+        } else {
+            args = new Object[]{ flusso.getDescrizione(), flusso.getTopicName() };
+            sql = INSERT_BC_FLOW_CONFIG;
+        }
+        int rows = jdbcSqlServer.update(sql, args);
+        return rows;
+    }
+
+    @Override
+    public int savePax(Pax pax) {
+        String sql;
+        Object[] args;
+        if(pax.getId() != null){
+            args = new Object[]{ pax.getDescrizione(), pax.getComposizione(), pax.getId() };
+            sql = UPDATE_BC_PAX_CONFIG;
+        } else {
+            args = new Object[]{ pax.getDescrizione(), pax.getComposizione() };
+            sql = INSERT_BC_PAX_CONFIG;
+        }
+        int rows = jdbcSqlServer.update(sql, args);
+        return rows;
+    }
+
+    @Override
+    public int saveProdotto(Prodotto prod) {
+        String sql;
+        Object[] args;
+        if(prod.getId() != null){
+            args = new Object[]{ prod.getDescrizione(), prod.getCodAgenzia(), prod.getId() };
+            sql = UPDATE_BC_PRODUCT_CONFIG;
+        } else {
+            args = new Object[]{ prod.getDescrizione(), prod.getCodAgenzia() };
+            sql = INSERT_BC_PRODUCT_CONFIG;
+        }
+        int rows = jdbcSqlServer.update(sql, args);
+        return rows;
+    }
+
+    @Override
+    public int savePersistenza(Persistenza pers) {
+        String sql;
+        Object[] args;
+        if(pers.getId() != null){
+            args = new Object[]{ pers.getTopicName(), pers.getId() };
+            sql = UPDATE_BC_PERSISTENCE_CONFIG;
+        } else {
+            args = new Object[]{ pers.getTopicName() };
+            sql = INSERT_BC_PERSISTENCE_CONFIG;
+        }
+        int rows = jdbcSqlServer.update(sql, args);
+        return rows;
+    }
+
+    @Override
+    public int saveCriterio(Criterio crit) {
+        String sql;
+        Object[] args;
+        if(crit.getId() != null){
+            args = new Object[]{ crit.getCriterio(), crit.getColonnaDb(), crit.getId() };
+            sql = UPDATE_BC_PRODUCT_CRITERIA;
+        } else {
+            args = new Object[]{ crit.getCriterio(), crit.getColonnaDb() };
+            sql = INSERT_BC_PRODUCT_CRITERIA;
+        }
+        int rows = jdbcSqlServer.update(sql, args);
+        return rows;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> getListValueCriteria(int criteriaId) {
+        List<String> values = jdbcSqlServer.query(GET_LIST_VALUE_CRITERIA, new Object[]{ criteriaId }, new RowMapper<String>() {
+            @Override
+            public String mapRow(ResultSet rs, int rowNum) throws SQLException {
+                if(criteriaId == 5) {
+                    return transformDataForFe(rs.getString("VALUE"));
+                }
+                return rs.getString("VALUE");
+            }
+        });
+        return values;
+    }
+
+    private String transformDataForFe(String data){
+        if(data != null && data.length() == 10) {
+            return data.substring(8, 10) + '/' + data.substring(5, 7) + '/' + data.substring(0, 4);
+        }
+        return null;
+    }
+
+    private String transformDataForDb(String data){
+        if(data != null && data.length() == 10) {
+            return data.substring(6, 10) + '-' + data.substring(3, 5) + '-' + data.substring(0, 2);
+        }
+        return null;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Integer> getListOrdersCriteria() {
+        List<Integer> values = jdbcSqlServer.query(GET_LIST_ORDER_CRITERIA, new Object[]{}, new RowMapper<Integer>() {
+            @Override
+            public Integer mapRow(ResultSet rs, int rowNum) throws SQLException {
+                return rs.getInt("ORDER");
+            }
+        });
+        return values;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> getListValueOwnedCriteria(int productId, int producerId, int criteriaId) {
+        Object[] args = new Object[]{productId, producerId, criteriaId};
+        List<String> values = jdbcSqlServer.query(GET_LIST_VALUE_OWNED_CRITERIA, args, new RowMapper<String>() {
+            @Override
+            public String mapRow(ResultSet rs, int rowNum) throws SQLException {
+                if(criteriaId == 5) {
+                    return transformDataForFe(rs.getString("VALUE"));
+                }
+                return rs.getString("VALUE");
+            }
+        });
+        return values;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Integer> getListOrderOwnedCriteria(int productId, int producerId, int criteriaId) {
+        Object[] args = new Object[]{productId, producerId, criteriaId};
+        List<Integer> values = jdbcSqlServer.query(GET_LIST_ORDER_OWNED_CRITERIA, args, new RowMapper<Integer>() {
+            @Override
+            public Integer mapRow(ResultSet rs, int rowNum) throws SQLException {
+                return rs.getInt("ORDER");
+            }
+        });
+        return values;
+    }
+
+    @Override
+    public int modRowPrioritarization(Row modRow) {
+        int rows = 0;
+        rows += jdbcSqlServer.update(MODIFICA_ROW_PRIORITY, new Object[]{ modRow.getExecDay(), modRow.getProducerId() });
+        rows += jdbcSqlServer.update(MODIFICA_ROW_FLUSSO, new Object[]{ modRow.getIdFlusso(), modRow.getProducerId() });
+
+        rows += jdbcSqlServer.update(DELETE_PAX_RELATION_BY_PRODUCT, new Object[]{ modRow.getOldProductId()});
+        for (int paxId: modRow.getPaxIds()) {
+            rows += jdbcSqlServer.update(INSERT_PAX_RELATION, new Object[]{ paxId, modRow.getIdProdotto()});
+        }
+        rows += jdbcSqlServer.update(DELETE_PERSISTANCE_RELATION_BY_PRODUCT, new Object[]{ modRow.getOldProductId()});
+        for (int paxId: modRow.getPersistanceIds()) {
+            rows += jdbcSqlServer.update(INSERT_PERSISTANCE_RELATION, new Object[]{ paxId, modRow.getIdProdotto()});
+        }
+        rows += jdbcSqlServer.update(DELETE_CRITERIA_RELATION_BY_IDS, new Object[]{ modRow.getProducerId(), modRow.getOldProductId() });
+        for (Criterio crit: modRow.getCriteria()) {
+            for (Checked checked: crit.getValues()) {
+                String value = checked.getValue();
+                if(crit.getId().compareTo(BigDecimal.valueOf(5)) == 0) {
+                    value = transformDataForDb(value);
+                }
+                rows += jdbcSqlServer.update(INSERT_CRITERIA_RELATION, new Object[]{ modRow.getProducerId(), modRow.getIdProdotto(), crit.getId(), crit.getOrder(), value});
+            }
+        }
+        return rows;
+    }
+
+    @Override
+    public int newRowPrioritarization(Row newRow) {
+        int rows = 0;
+        int newProducerId = jdbcSqlServer.queryForObject(GET_PRODUCER_ID, new Object[]{}, Integer.class);
+        rows += jdbcSqlServer.update(INSERT_FLOW_RELATION, new Object[]{ newProducerId, newRow.getIdFlusso()});
+        rows += jdbcSqlServer.update(INSERT_INTO_PRIORITY, new Object[]{ newProducerId, newRow.getExecDay(), "WAIT"});
+        for (int paxId: newRow.getPaxIds()) {
+            rows += jdbcSqlServer.update(SAVE_PAX_RELATION, new Object[]{ paxId, newRow.getIdProdotto()});
+        }
+        for (int persId: newRow.getPersistanceIds()) {
+            rows += jdbcSqlServer.update(SAVE_PERSISTANCE_RELATION, new Object[]{ persId, newRow.getIdProdotto()});
+        }
+        for (Criterio crit: newRow.getCriteria()) {
+            for (Checked checked: crit.getValues()) {
+                if(checked.isChecked()) {
+                    String value = checked.getValue();
+                    if(crit.getId().compareTo(BigDecimal.valueOf(5)) == 0) {
+                        value = transformDataForDb(value);
+                    }
+                    rows += jdbcSqlServer.update(SAVE_CRITERIA_RELATION, new Object[]{newProducerId, newRow.getIdProdotto(), crit.getId(), crit.getOrder(), value});
+                }
+            }
+        }
+        return rows;
+    }
+
+    @Override
+    public int deleteRowPrioritarization(List<Row> rowList) {
+        int rows = 0;
+        for (Row row: rowList) {
+            rows += jdbcSqlServer.update(DELETE_ROW_PAX, new Object[]{ row.getIdProdotto() });
+            rows += jdbcSqlServer.update(DELETE_ROW_PERSISTENCE, new Object[]{ row.getIdProdotto() });
+            rows += jdbcSqlServer.update(DELETE_ROW_PRODUCT_PRODUCER, new Object[]{ row.getIdProdotto(), row.getProducerId() });
+            rows += jdbcSqlServer.update(DELETE_ROW_PRIORITY, new Object[]{ row.getProducerId() });
+            rows += jdbcSqlServer.update(DELETE_ROW_PRODUCER, new Object[]{ row.getProducerId() });
+            rows += jdbcSqlServer.update(DELETE_ROW_PRODUCT, new Object[]{ row.getIdProdotto() });
+        }
+        return rows;
+    }
+
+    @Override
+    public int exchangePriority(int id, int oldPriority, int newPriority) {
+        int rows = 0;
+        rows += jdbcSqlServer.update(UPDATE_PRIORITY_BY_PRIORITY, new Object[]{ oldPriority, newPriority });
+        rows += jdbcSqlServer.update(UPDATE_PRIORITY, new Object[]{ newPriority, id });
+        return rows;
+    }
+
+    @Override
+    public int deleteRowAnagrafica(String tabella, int id) {
+        int row = 0;
+        if(tabella.equalsIgnoreCase("flussi")){
+            row += jdbcSqlServer.update(DELETE_BC_FLOW_CONFIG, new Object[]{ id });
+        } else if(tabella.equalsIgnoreCase("pax")){
+            row += jdbcSqlServer.update(DELETE_BC_PAX_CONFIG, new Object[]{ id });
+        } else if(tabella.equalsIgnoreCase("prodotti")){
+            row += jdbcSqlServer.update(DELETE_BC_PRODUCT_CONFIG, new Object[]{ id });
+        } else if(tabella.equalsIgnoreCase("persistenza")){
+            row += jdbcSqlServer.update(DELETE_BC_PERSISTENCE_CONFIG, new Object[]{ id });
+        } else if(tabella.equalsIgnoreCase("criteri")){
+            row += jdbcSqlServer.update(DELETE_BC_PRODUCT_CRITERIA, new Object[]{ id });
+        }
+        return row;
+    }
+
+    @Override
+    public int changeStateRows(List<Integer> ids) {
+        int row = 0;
+        for (int id: ids) {
+            String oldState = jdbcSqlServer.queryForObject(GET_PRIORITY_STATE, new Object[]{id}, new RowMapper<String>() {
+                @Override
+                public String mapRow(ResultSet rs, int rowNum) throws SQLException {
+                    return rs.getString("STATE");
+                }
+            });
+            List<String> listState = new ArrayList<>(Arrays.asList(new String[] { "COMPLETED", "READY", "WAIT" }));
+            String newState = null;
+            if (oldState != null){
+                if("TEMP".equals(oldState)){
+                    newState = "WAIT";
+                } else if(listState.contains(oldState)){
+                    newState = "TEMP";
+                }
+                if(newState != null) {
+                    row += jdbcSqlServer.update(UPDATE_PRIORITY_STATE, new Object[]{newState, id});
+                }
+            }
+        }
+        return row;
+    }
+
+}
