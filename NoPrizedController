@@ -1,0 +1,57 @@
+package it.xx.xxx.web.noPrized;
+
+import it.xx.xxx.core.noPrized.service.NoPrizedService;
+import it.xx.xxx.domain.noPrized.NonPrezzato;
+import it.xx.xxx.domain.noPrized.NonPrezzatoFilters;
+import it.xx.xxx.domain.noPrized.NonPrezzatoRequest;
+import it.xx.xxx.web.common.AbstractRestService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.ResponseBody;
+
+import java.util.Date;
+import java.util.List;
+
+@RequestMapping(value = "/noPrized", produces = MediaType.APPLICATION_JSON_VALUE)
+@Controller
+public class NoPrizedController extends AbstractController {
+
+    @Autowired
+    private NoPrizedService service;
+
+    @ResponseBody
+    @RequestMapping(value = "/getLastFiveDays", method = RequestMethod.GET)
+    public List<Date> getLastFiveDays() {
+        List<Date> data = service.getLastFiveDays();
+        if(data==null) throw new RuntimeException(ERRORE_DATI_MANCANTI_TABELLE);
+        return data;
+    }
+
+    @ResponseBody
+    @RequestMapping(value = "/getRecordsCount", method = RequestMethod.POST)
+    public Integer getRecordsCount(@RequestBody NonPrezzatoRequest nonPrezzatoRequest) {
+        Integer count = service.getRecordsCount(nonPrezzatoRequest);
+        return count;
+    }
+
+    @ResponseBody
+    @RequestMapping(value = "/getTableData", method = RequestMethod.POST)
+    public List<NonPrezzato> getTableData(@RequestBody NonPrezzatoRequest nonPrezzatoRequest) {
+        List<NonPrezzato> data = service.getTableData(nonPrezzatoRequest);
+        if(data==null) throw new RuntimeException(ERRORE_DATI_MANCANTI_TABELLE);
+        return data;
+    }
+
+    @ResponseBody
+    @RequestMapping(value = "/getFiltersTable", method = RequestMethod.POST)
+    public NonPrezzatoFilters getFiltersTable(@RequestBody NonPrezzatoRequest nonPrezzatoRequest) {
+        NonPrezzatoFilters data = service.getFiltersTable(nonPrezzatoRequest);
+        if(data==null) throw new RuntimeException(ERRORE_DATI_MANCANTI_TABELLE);
+        return data;
+    }
+
+}
